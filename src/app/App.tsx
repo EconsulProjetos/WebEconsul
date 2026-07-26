@@ -280,6 +280,55 @@ function ProjectsPage({ projects, setProjects, pushUndo }: {
   const [view, setView] = useState<"kanban" | "list">("kanban");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ ...BLANK_PROJECT, tagsRaw: "" });
+  const projectsRef = useRef<HTMLDivElement>(null);
+  const dragState = useRef({ active: false, pointerId: -1, startX: 0, scrollLeft: 0, moved: false });
+
+  const handlePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.button !== 0) return;
+
+    const container = projectsRef.current;
+    if (!container) return;
+
+    dragState.current = {
+      active: true,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      scrollLeft: container.scrollLeft,
+      moved: false,
+    };
+    container.setPointerCapture(event.pointerId);
+  };
+
+  const handlePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const container = projectsRef.current;
+    const drag = dragState.current;
+    if (!container || !drag.active || drag.pointerId !== event.pointerId) return;
+
+    const distance = event.clientX - drag.startX;
+    if (Math.abs(distance) > 5) {
+      drag.moved = true;
+    }
+    container.scrollLeft = drag.scrollLeft - distance;
+  };
+
+  const handlePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+    const container = projectsRef.current;
+    const drag = dragState.current;
+    if (!container || drag.pointerId !== event.pointerId) return;
+
+    drag.active = false;
+    if (container.hasPointerCapture(event.pointerId)) {
+      container.releasePointerCapture(event.pointerId);
+    }
+  };
+
+  const handleClickCapture = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (dragState.current.moved) {
+      event.preventDefault();
+      event.stopPropagation();
+      dragState.current.moved = false;
+    }
+  };
 
   const save = () => {
     if (!form.name.trim()) return;
@@ -371,8 +420,17 @@ function ProjectsPage({ projects, setProjects, pushUndo }: {
       </div>
 
       {view === "kanban" && (
-        <div className="overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-[900px]">
+        <div
+          ref={projectsRef}
+          className="overflow-x-auto pb-4 cursor-grab active:cursor-grabbing select-none [touch-action:pan-y_pinch-zoom] scroll-smooth"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onClickCapture={handleClickCapture}
+          onDragStart={event => event.preventDefault()}
+        >
+          <div className="flex gap-4 min-w-[1264px]">
             {cols.map(col => {
               const cards = projects.filter(p => p.status === col.status);
               const totalBudget = cards.reduce((s, p) => s + p.budget, 0);
